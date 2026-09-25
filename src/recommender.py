@@ -92,14 +92,14 @@ class EaseRecommender:
 
         return bool(self.user_profiles[user_row].any())
 
-    def get_scores(self, user_id: int) -> np.ndarray:
+    def get_scores(self, user_id: int, popularity_only: bool = False) -> np.ndarray:
         if self.weights is None:
             raise ValueError("Train or load a model before requesting recommendations")
 
         if user_id <= 0:
             raise ValueError("User ID must be positive")
 
-        if not self.has_positive_history(user_id):
+        if popularity_only or not self.has_positive_history(user_id):
             return self.popularity.copy()
 
         user_row = self.user_index[user_id]
@@ -107,11 +107,13 @@ class EaseRecommender:
 
         return self.weights[liked_movies].sum(axis=0, dtype=np.float64)
 
-    def recommend(self, user_id: int, top_k: int = 10) -> pd.DataFrame:
+    def recommend(
+        self, user_id: int, top_k: int = 10, popularity_only: bool = False
+    ) -> pd.DataFrame:
         if top_k <= 0:
             raise ValueError("The number of recommendations must be positive")
 
-        scores = self.get_scores(user_id)
+        scores = self.get_scores(user_id, popularity_only)
         eligible = self.popularity > 0
         user_row = self.user_index.get(user_id)
 
