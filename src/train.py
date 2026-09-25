@@ -3,15 +3,15 @@ from pathlib import Path
 from time import perf_counter
 
 from dataset import DATA_DIRECTORY, MovieDataset
-from recommender import MODEL_PATH, EaseRecommender
+from recommender import DEFAULT_MIN_RATING, DEFAULT_REGULARIZATION, MODEL_PATH, EaseRecommender
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train the movie recommendation model.")
     parser.add_argument("--data-dir", type=Path, default=DATA_DIRECTORY)
     parser.add_argument("--model-path", type=Path, default=MODEL_PATH)
-    parser.add_argument("--regularization", type=float, default=100.0)
-    parser.add_argument("--min-rating", type=int, default=7)
+    parser.add_argument("--regularization", type=float, default=DEFAULT_REGULARIZATION)
+    parser.add_argument("--min-rating", type=int, default=DEFAULT_MIN_RATING)
     arguments = parser.parse_args()
 
     try:

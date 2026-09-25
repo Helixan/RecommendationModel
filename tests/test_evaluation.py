@@ -1,6 +1,12 @@
+import contextlib
+import io
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -9,6 +15,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from evaluation import InteractionSplitter, RankingEvaluator
+from evaluate import main, select_model
 
 
 class FixedRecommender:
@@ -141,6 +148,88 @@ class EvaluationTests(unittest.TestCase):
                     self.assertFalse(
                         model.seen_movies[model.user_index[user_id], model.movie_index[row.movie_id]]
                     )
+
+    def test_training_threshold_does_not_change_validation_relevance(self):
+        training, validation, _ = InteractionSplitter().split(self.interactions)
+        training.loc[training.index[::2], "rating"] = 6
+        validation.loc[validation.index[::2], "rating"] = 6
+        movies = pd.DataFrame(
+            {"movie_id": [f"movie-{number}" for number in range(10)], "title": "Movie"}
+        )
+        evaluator = RankingEvaluator(relevance_rating=7)
+        with contextlib.redirect_stdout(io.StringIO()):
+            best, results = select_model(training, validation, movies, evaluator, [100], [6, 7])
+
+        self.assertEqual(evaluator.relevance_rating, 7)
+        self.assertEqual(len(results), 2)
+        for result in results:
+            self.assertEqual(result["metrics"]["relevant_interactions"], 3)
+            self.assertEqual(result["metrics"]["evaluated_users"], 3)
+
+    def test_selection_prioritizes_validation_ndcg(self):
+        training, validation, _ = InteractionSplitter().split(self.interactions)
+        movies = pd.DataFrame(
+            {"movie_id": [f"movie-{number}" for number in range(10)], "title": "Movie"}
+        )
+        evaluator = RankingEvaluator()
+        metrics = [
+            {"ndcg_at_k": 0.1, "recall_at_k": 0.9, "precision_at_k": 0.5},
+            {"ndcg_at_k": 0.2, "recall_at_k": 0.3, "precision_at_k": 0.2},
+        ]
+        with patch.object(evaluator, "evaluate", side_effect=metrics) as evaluate:
+            with contextlib.redirect_stdout(io.StringIO()):
+                best, results = select_model(training, validation, movies, evaluator, [100], [6, 7])
+
+        self.assertEqual(best["min_rating"], 7)
+        for call in evaluate.call_args_list:
+            model, held_out = call.args
+            pd.testing.assert_frame_equal(held_out, validation)
+            self.assertEqual(int(model.seen_movies.sum()), len(training))
+            for row in validation.itertuples():
+                self.assertFalse(model.seen_movies[model.user_index[row.user_id], model.movie_index[row.movie_id]])
+
+    def test_validation_only_does_not_evaluate_final_test(self):
+        movies = pd.DataFrame(
+            {"movie_id": [f"movie-{number}" for number in range(10)], "title": "Movie"}
+        )
+        dataset = SimpleNamespace(
+            movies=movies,
+            get_interactions=lambda: self.interactions,
+            get_cold_start_users=lambda: [],
+        )
+        _, validation, _ = InteractionSplitter().split(self.interactions)
+        evaluator = RankingEvaluator()
+        original_evaluate = evaluator.evaluate
+        evaluated_parts = []
+
+        def record_evaluation(model, held_out, popularity_only=False):
+            evaluated_parts.append(held_out.copy())
+            return original_evaluate(model, held_out, popularity_only)
+
+        with tempfile.TemporaryDirectory() as directory:
+            data_directory = Path(directory)
+            output = data_directory / "evaluation.json"
+            for filename in ["events.csv.gz", "users.csv.gz", "movies.csv.gz"]:
+                (data_directory / filename).write_bytes(b"fixture")
+            arguments = [
+                "evaluate.py", "--validation-only", "--regularizations", "100",
+                "--min-ratings", "6", "7", "--data-dir", str(data_directory),
+                "--output", str(output),
+            ]
+            with patch("sys.argv", arguments), patch("evaluate.MovieDataset", return_value=dataset):
+                with patch("evaluate.RankingEvaluator", return_value=evaluator):
+                    with patch.object(evaluator, "evaluate", side_effect=record_evaluation):
+                        with contextlib.redirect_stdout(io.StringIO()):
+                            main()
+            saved = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertFalse(saved["test_evaluated"])
+        self.assertNotIn("test_model", saved)
+        self.assertEqual(saved["relevance_rating"], 7)
+        self.assertEqual(saved["baseline_parameters"], {"regularization": 100, "min_rating": 7})
+        self.assertEqual(len(evaluated_parts), 4)
+        for held_out in evaluated_parts:
+            pd.testing.assert_frame_equal(held_out, validation)
 
     def test_no_relevant_ratings_are_rejected(self):
         held_out = pd.DataFrame(

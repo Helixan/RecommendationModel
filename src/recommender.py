@@ -5,10 +5,16 @@ import pandas as pd
 
 
 MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "recommender.npz"
+DEFAULT_REGULARIZATION = 100.0
+DEFAULT_MIN_RATING = 6
 
 
 class EaseRecommender:
-    def __init__(self, regularization: float = 100.0, min_rating: int = 7):
+    def __init__(
+        self,
+        regularization: float = DEFAULT_REGULARIZATION,
+        min_rating: int = DEFAULT_MIN_RATING,
+    ):
         if not np.isfinite(regularization) or regularization <= 0:
             raise ValueError("Regularization must be a positive finite number")
 
