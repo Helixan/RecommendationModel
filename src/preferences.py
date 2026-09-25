@@ -31,6 +31,8 @@ class ColdStartError(RuntimeError):
 
 
 class PreferenceInterpreter:
+    """Turn likes and dislikes into a cached GPT6 Luna preference profile."""
+
     def __init__(
         self,
         genres: list[str],
@@ -51,6 +53,7 @@ class PreferenceInterpreter:
             sort_keys=True,
         )
         schema = self._response_schema()
+        # Refresh the profile when the prompt or response schema changes
         cache_input = json.dumps(
             [LLM_MODEL, INSTRUCTIONS, user_input, schema], ensure_ascii=False
         )

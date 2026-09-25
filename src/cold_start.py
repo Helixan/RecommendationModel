@@ -11,6 +11,8 @@ from recommender import EaseRecommender
 
 
 class ColdStartRecommender:
+    """Rank catalog movies using a user's descriptions and movie examples."""
+
     def __init__(
         self,
         movies: pd.DataFrame,
@@ -61,6 +63,7 @@ class ColdStartRecommender:
         if top_k < 1:
             raise ValueError("The number of recommendations must be positive")
 
+        # Reuse the interpretation, but rank again with the current model and seen movies
         profile, cached = self.interpreter.get_profile(likes, dislikes, offline)
         seen = set() if seen_movie_ids is None else set(seen_movie_ids)
         recommendations = self._rank_movies(profile, seen, top_k)
@@ -80,6 +83,7 @@ class ColdStartRecommender:
         return re.sub(r"[^a-z0-9]", "", title)
 
     def _match_titles(self, titles: list[str]) -> list[int]:
+        """Match normalized titles without guessing at similar names."""
         matches = set()
         for title in titles:
             matches.update(self.title_index.get(self._normalize_title(title), []))
@@ -127,6 +131,7 @@ class ColdStartRecommender:
         disliked = self._match_titles(profile["disliked_titles"])
         preferred_genres = set(profile["liked_genres"])
         excluded_genres = set(profile["excluded_genres"])
+        # Treat recognized examples as movies the user already knows
         excluded_ids = seen | set(self.movie_ids[liked]) | set(self.movie_ids[disliked])
 
         likes_text = profile["likes_summary"] + " " + " ".join(sorted(preferred_genres))
@@ -137,6 +142,7 @@ class ColdStartRecommender:
              for genres in self.movie_genres]
         )
         collaborative = self._collaborative_scores(liked, disliked)
+        # Hand-set weights for the cold-start blend
         scores = (
             0.50 * positive_text
             + 0.25 * genre_scores

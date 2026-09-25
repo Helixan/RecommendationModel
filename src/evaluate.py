@@ -31,6 +31,7 @@ def select_model(
     if not regularizations or not min_ratings:
         raise ValueError("Provide at least one regularization and training rating threshold")
 
+    # Only the training threshold changes; relevance stays fixed in the evaluator
     candidates = [
         (regularization, min_rating)
         for min_rating in sorted(set(min_ratings))
@@ -150,6 +151,7 @@ def main() -> None:
             "data_sha256": file_hashes,
         }
 
+        # Use the test split only after parameter selection
         if not arguments.validation_only:
             final_training = pd.concat([training, validation], ignore_index=True)
             final_model = EaseRecommender(selected_regularization, selected_min_rating)

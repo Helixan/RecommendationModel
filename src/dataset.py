@@ -7,6 +7,8 @@ DATA_DIRECTORY = Path(__file__).resolve().parents[1] / "data"
 
 
 class MovieDataset:
+    """Load the course data and combine watch and rating events."""
+
     def __init__(self, data_directory: Path = DATA_DIRECTORY):
         self.data_directory = data_directory
         self.events = self._read_table(
@@ -41,6 +43,7 @@ class MovieDataset:
                 f"Missing {path}. Run python src/download_data.py first."
             )
 
+        # Keep empty descriptions as strings
         table = pd.read_csv(path, dtype=str, keep_default_na=False)
         missing_columns = set(required_columns) - set(table.columns)
 
@@ -112,6 +115,7 @@ class MovieDataset:
 
         ratings = movie_events.loc[movie_events["event_type"].eq("rating")]
         ratings = ratings.sort_values("timestamp", kind="stable")
+        # Keep the latest rating if a user rates the same movie again
         ratings = ratings.drop_duplicates(keys, keep="last")
 
         interactions = interactions.merge(

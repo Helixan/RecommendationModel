@@ -10,6 +10,8 @@ DEFAULT_MIN_RATING = 6
 
 
 class EaseRecommender:
+    """Learn movie-to-movie weights from binary user profiles using EASE."""
+
     def __init__(
         self,
         regularization: float = DEFAULT_REGULARIZATION,
@@ -59,9 +61,11 @@ class EaseRecommender:
 
         user_rows = interactions["user_id"].map(self.user_index).to_numpy(dtype=np.int64)
         movie_columns = interactions["movie_id"].map(self.movie_index).to_numpy(dtype=np.int64)
+        # Seen movies include low ratings, even though they do not count as positive
         self.seen_movies[user_rows, movie_columns] = True
 
         liked = interactions["rating"].ge(self.min_rating).fillna(False)
+        # A rating takes precedence over the watch event
         unrated_watches = (
             interactions["rating"].isna() & interactions["watch_count"].gt(0)
         )
@@ -77,7 +81,9 @@ class EaseRecommender:
         gram_matrix[diagonal] += self.regularization
 
         inverse = np.linalg.solve(gram_matrix, np.eye(len(self.movie_ids)))
+        # Normalize each target column using the EASE closed-form solution
         self.weights = -inverse / np.diag(inverse)
+        # Prevent a movie from predicting itself
         self.weights[diagonal] = 0.0
         self.weights = self.weights.astype(np.float32)
         self.popularity = self.user_profiles.mean(axis=0)

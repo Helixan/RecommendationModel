@@ -33,6 +33,7 @@ class InteractionSplitter:
         if interactions.duplicated(keys).any():
             raise ValueError("Split requires one row per user and movie")
 
+        # Keep the split repeatable even if the input row order changes
         ordered = interactions.sort_values(keys).reset_index(drop=True)
         random = np.random.default_rng(self.seed)
         training_indices = []
@@ -46,6 +47,7 @@ class InteractionSplitter:
                 training_indices.extend(history.index)
                 continue
 
+            # Each row contains the whole watch/rating pair
             indices = random.permutation(history.index.to_numpy())
             validation_count = min(max(1, int(count * self.validation_fraction)), count - 2)
             test_count = min(
@@ -105,6 +107,7 @@ class RankingEvaluator:
             hits = np.array([movie_id in targets for movie_id in movie_ids], dtype=float)
             hit_count = int(hits.sum())
             discounts = 1.0 / np.log2(np.arange(2, len(hits) + 2))
+            # Unsupported targets still count, so missing them lowers the score
             ideal_count = min(len(targets), self.top_k)
             ideal_dcg = (1.0 / np.log2(np.arange(2, ideal_count + 2))).sum()
 

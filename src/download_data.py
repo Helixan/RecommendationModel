@@ -6,6 +6,7 @@ from urllib.request import urlopen
 
 
 DATA_DIRECTORY = Path(__file__).resolve().parents[1] / "data"
+# Use a fixed dataset revision for repeatable downloads
 DATA_URL = (
     "https://media.githubusercontent.com/media/mlip-cmu-online/public-data/"
     "0687388e6d91f0c43ba30a3b80facb7261341eff/m0/data"
